@@ -1,0 +1,21 @@
+# Godot generated state
+.godot/
+
+# .NET build outputs
+bin/
+obj/
+
+# Visual Studio / VS Code local state
+.vs/
+.vscode/
+*.user
+*.rsuser
+*.suo
+
+# OS/editor noise
+Thumbs.db
+Desktop.ini
+
+# Local release artifacts
+dist/
+*.zip
