@@ -15,6 +15,8 @@
   "SAVE_BROWSER.title.multiplayer": "Multiplayer Save Browser",
   "SAVE_BROWSER.action.loadSnapshot": "Load Snapshot",
   "SAVE_BROWSER.action.backup": "Backup",
+  "SAVE_BROWSER.action.openFolder": "Open Folder",
+  "SAVE_BROWSER.action.editNote": "Edit Note",
   "SAVE_BROWSER.action.deleteSave": "Delete Save",
   "SAVE_BROWSER.action.deleteRun": "Delete Run",
   "SAVE_BROWSER.empty": "No archived saves yet.",
@@ -29,9 +31,18 @@
   "SAVE_BROWSER.snapshotDetails": "[b]{SaveId}[/b]\nRun: {RunId}\nKind: {Kind}\nCreated: {Created}\nCharacters: {Characters}\nPlayers: {Players}\nFloor: {Floor}\nAscension: {Ascension}\nHP: {Hp}\nGold: {Gold}\nDaily: {Daily}\nPlatform: {Platform}",
   "SAVE_BROWSER.snapshotDetailsUnavailable": "[b]{SaveId}[/b]\nCreated: {Created}\nSummary: {Unknown}\nError: {Error}",
   "SAVE_BROWSER.runDetails": "[b]{RunId}[/b]\nSnapshots: {SnapshotCount}\nCurrent Active Run: {Current}\nLatest Save: {LatestSave}",
+  "SAVE_BROWSER.note.snapshot": "Snapshot Note: {Note}",
+  "SAVE_BROWSER.note.run": "Run Note: {Note}",
+  "SAVE_BROWSER.note.none": "none",
+  "SAVE_BROWSER.noteDialog.title.snapshot": "Edit Snapshot Note",
+  "SAVE_BROWSER.noteDialog.title.run": "Edit Run Note",
+  "SAVE_BROWSER.noteDialog.label.snapshot": "Add or edit the note for this archived snapshot.",
+  "SAVE_BROWSER.noteDialog.label.run": "Add or edit the note for this archived run.",
   "POPUP.loadFailed.title": "Load Failed",
   "POPUP.loadFailed.restoreFailed.body": "The selected snapshot could not be restored into the active save slot.",
   "POPUP.loadFailed.singleplayerUnreadable.body": "The restored singleplayer save could not be read by the game.",
   "POPUP.loadFailed.multiplayerUnreadable.body": "The restored multiplayer save could not be read by the game.",
-  "POPUP.loadFailed.multiplayerMainMenuMissing.body": "Main menu is not available for multiplayer restore."
+  "POPUP.loadFailed.multiplayerMainMenuMissing.body": "Main menu is not available for multiplayer restore.",
+  "POPUP.openFolderFailed.title": "Open Folder Failed",
+  "POPUP.openFolderFailed.body": "The save archive folder could not be opened:\n{Path}"
 }

@@ -66,6 +66,18 @@ internal sealed class SaveArchivePathResolver
 		return true;
 	}
 
+	public bool TryGetRunMetadataPath(bool isMultiplayer, string runId, out string? metadataPath)
+	{
+		metadataPath = null;
+		if (!TryGetRunRoot(isMultiplayer, runId, out string? runRoot) || string.IsNullOrEmpty(runRoot))
+		{
+			return false;
+		}
+
+		metadataPath = Path.Combine(runRoot, "run.json");
+		return true;
+	}
+
 	public bool TryGetRollbackDirectory(bool isMultiplayer, out string? rollbackDirectory)
 	{
 		rollbackDirectory = null;

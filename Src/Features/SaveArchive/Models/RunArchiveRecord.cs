@@ -22,4 +22,7 @@ internal sealed class RunArchiveRecord
 
 	[JsonPropertyName("latest_summary")]
 	public SaveArchiveSummary? LatestSummary { get; set; }
+
+	[JsonPropertyName("note")]
+	public string? Note { get; set; }
 }

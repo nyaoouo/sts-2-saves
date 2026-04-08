@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using Godot;
@@ -84,6 +85,38 @@ internal static class SaveBrowserCoordinator
 		return ServiceRegistry.ArchiveService.BackupRun(isMultiplayer, runId);
 	}
 
+	public static bool OpenFolderForSnapshot(SaveArchiveMetadata metadata)
+	{
+		if (!ServiceRegistry.ArchiveService.TryGetSnapshotDirectory(metadata, out string? snapshotDirectory) || string.IsNullOrEmpty(snapshotDirectory))
+		{
+			ShowPopup(SaveUiText.Keys.Popup.OpenFolderFailedTitle, SaveUiText.Keys.Popup.OpenFolderFailedBody, ("Path", metadata.SaveId));
+			return false;
+		}
+
+		return OpenFolder(snapshotDirectory);
+	}
+
+	public static bool OpenFolderForRun(bool isMultiplayer, string runId)
+	{
+		if (!ServiceRegistry.ArchiveService.TryGetRunDirectory(isMultiplayer, runId, out string? runDirectory) || string.IsNullOrEmpty(runDirectory))
+		{
+			ShowPopup(SaveUiText.Keys.Popup.OpenFolderFailedTitle, SaveUiText.Keys.Popup.OpenFolderFailedBody, ("Path", runId));
+			return false;
+		}
+
+		return OpenFolder(runDirectory);
+	}
+
+	public static bool UpdateSnapshotNote(SaveArchiveMetadata metadata, string? note)
+	{
+		return ServiceRegistry.ArchiveService.UpdateSnapshotNote(metadata, note);
+	}
+
+	public static bool UpdateRunNote(bool isMultiplayer, string runId, string? note)
+	{
+		return ServiceRegistry.ArchiveService.UpdateRunNote(isMultiplayer, runId, note);
+	}
+
 	public static bool IsCurrentRun(bool isMultiplayer, string runId)
 	{
 		return ServiceRegistry.ArchiveService.TryGetCurrentRunId(isMultiplayer, out string? currentRunId) && string.Equals(currentRunId, runId, StringComparison.Ordinal);
@@ -157,11 +190,29 @@ internal static class SaveBrowserCoordinator
 		return true;
 	}
 
-	private static void ShowPopup(string titleKey, string bodyKey)
+	private static bool OpenFolder(string path)
+	{
+		if (!Directory.Exists(path))
+		{
+			ShowPopup(SaveUiText.Keys.Popup.OpenFolderFailedTitle, SaveUiText.Keys.Popup.OpenFolderFailedBody, ("Path", path));
+			return false;
+		}
+
+		Error result = OS.ShellOpen(new Uri(path).AbsoluteUri);
+		if (result != Error.Ok)
+		{
+			ShowPopup(SaveUiText.Keys.Popup.OpenFolderFailedTitle, SaveUiText.Keys.Popup.OpenFolderFailedBody, ("Path", path));
+			return false;
+		}
+
+		return true;
+	}
+
+	private static void ShowPopup(string titleKey, string bodyKey, params (string Name, object? Value)[] variables)
 	{
 		NErrorPopup? popup = NErrorPopup.Create(
 			SaveUiText.Get(titleKey),
-			SaveUiText.Get(bodyKey),
+			variables.Length == 0 ? SaveUiText.Get(bodyKey) : SaveUiText.Format(bodyKey, variables),
 			showReportBugButton: false);
 		if (popup != null && NModalContainer.Instance != null)
 		{

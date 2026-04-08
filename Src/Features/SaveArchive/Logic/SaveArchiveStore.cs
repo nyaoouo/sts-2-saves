@@ -76,6 +76,24 @@ internal sealed class SaveArchiveStore
 		Log.Info($"NyMod.Saves wrote snapshot payload '{payloadPath}' and metadata '{metadataPath}'.");
 	}
 
+	public bool TryUpdateSnapshotMetadata(SaveArchiveMetadata metadata)
+	{
+		if (!_pathResolver.TryGetMetadataPath(metadata.IsMultiplayer, metadata.RunId, metadata.Kind, metadata.SaveId, out string? metadataPath) || string.IsNullOrEmpty(metadataPath))
+		{
+			Log.Warn($"NyMod.Saves could not resolve metadata path for snapshot '{metadata.SaveId}'.");
+			return false;
+		}
+
+		string? directory = Path.GetDirectoryName(metadataPath);
+		if (!string.IsNullOrEmpty(directory))
+		{
+			Directory.CreateDirectory(directory);
+		}
+
+		File.WriteAllText(metadataPath, JsonSerializer.Serialize(metadata, _jsonOptions));
+		return true;
+	}
+
 	public IReadOnlyList<SaveArchiveMetadata> LoadSnapshotsForRun(bool isMultiplayer, string runId, SaveArchiveKind kind)
 	{
 		if (!_pathResolver.TryGetSnapshotDirectory(isMultiplayer, runId, kind, out string? snapshotDirectory) || string.IsNullOrEmpty(snapshotDirectory) || !Directory.Exists(snapshotDirectory))
@@ -118,6 +136,63 @@ internal sealed class SaveArchiveStore
 			.Where(static name => !string.IsNullOrEmpty(name))
 			.OrderBy(static name => name, StringComparer.Ordinal)
 			.ToList()!;
+	}
+
+	public RunArchiveMetadata? LoadRunMetadata(bool isMultiplayer, string runId)
+	{
+		if (!_pathResolver.TryGetRunMetadataPath(isMultiplayer, runId, out string? metadataPath) || string.IsNullOrEmpty(metadataPath) || !File.Exists(metadataPath))
+		{
+			return null;
+		}
+
+		try
+		{
+			string json = File.ReadAllText(metadataPath);
+			return JsonSerializer.Deserialize<RunArchiveMetadata>(json, _jsonOptions);
+		}
+		catch (Exception ex)
+		{
+			Log.Warn($"NyMod.Saves failed to read run metadata '{metadataPath}': {ex.Message}");
+			return null;
+		}
+	}
+
+	public bool TryUpdateRunMetadata(RunArchiveMetadata metadata)
+	{
+		if (!_pathResolver.TryGetRunMetadataPath(metadata.IsMultiplayer, metadata.RunId, out string? metadataPath) || string.IsNullOrEmpty(metadataPath))
+		{
+			Log.Warn($"NyMod.Saves could not resolve run metadata path for run '{metadata.RunId}'.");
+			return false;
+		}
+
+		if (string.IsNullOrWhiteSpace(metadata.Note))
+		{
+			if (File.Exists(metadataPath))
+			{
+				File.Delete(metadataPath);
+			}
+
+			return true;
+		}
+
+		string? directory = Path.GetDirectoryName(metadataPath);
+		if (!string.IsNullOrEmpty(directory))
+		{
+			Directory.CreateDirectory(directory);
+		}
+
+		File.WriteAllText(metadataPath, JsonSerializer.Serialize(metadata, _jsonOptions));
+		return true;
+	}
+
+	public bool TryGetRunDirectory(bool isMultiplayer, string runId, out string? runDirectory)
+	{
+		return _pathResolver.TryGetRunRoot(isMultiplayer, runId, out runDirectory);
+	}
+
+	public bool TryGetSnapshotDirectory(SaveArchiveMetadata metadata, out string? snapshotDirectory)
+	{
+		return _pathResolver.TryGetSnapshotDirectory(metadata.IsMultiplayer, metadata.RunId, metadata.Kind, out snapshotDirectory);
 	}
 
 	public bool TryRestoreSnapshot(SaveArchiveMetadata metadata)

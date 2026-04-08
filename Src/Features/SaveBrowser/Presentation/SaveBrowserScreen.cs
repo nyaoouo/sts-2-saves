@@ -21,7 +21,8 @@ internal sealed partial class SaveBrowserScreen : NSubmenu
 	private const string BackButtonScenePath = "res://scenes/ui/back_button.tscn";
 
 	private readonly Dictionary<string, SaveArchiveMetadata> _snapshotsByKey = new Dictionary<string, SaveArchiveMetadata>(StringComparer.Ordinal);
-	private readonly Dictionary<string, string> _runIdsByKey = new Dictionary<string, string>(StringComparer.Ordinal);
+	private readonly Dictionary<string, RunArchiveRecord> _runsByKey = new Dictionary<string, RunArchiveRecord>(StringComparer.Ordinal);
+	private readonly Dictionary<string, RunArchiveRecord> _runsById = new Dictionary<string, RunArchiveRecord>(StringComparer.Ordinal);
 
 	private SaveBrowserRequest _request;
 	private Tree _tree = null!;
@@ -29,9 +30,12 @@ internal sealed partial class SaveBrowserScreen : NSubmenu
 	private Label _title = null!;
 	private Button _loadButton = null!;
 	private Button _backupButton = null!;
+	private Button _openFolderButton = null!;
+	private Button _editNoteButton = null!;
 	private Button _deleteSaveButton = null!;
 	private Button _deleteRunButton = null!;
 	private Button _abandonRunButton = null!;
+	private SaveNoteEditDialog _noteDialog = null!;
 	private string? _selectedKey;
 
 	protected override Control? InitialFocusedControl => _tree;
@@ -66,6 +70,8 @@ internal sealed partial class SaveBrowserScreen : NSubmenu
 		_tree.Connect(Tree.SignalName.ItemSelected, Callable.From(OnItemSelected));
 		_loadButton.Connect(BaseButton.SignalName.Pressed, Callable.From(OnLoadPressed));
 		_backupButton.Connect(BaseButton.SignalName.Pressed, Callable.From(OnBackupPressed));
+		_openFolderButton.Connect(BaseButton.SignalName.Pressed, Callable.From(OnOpenFolderPressed));
+		_editNoteButton.Connect(BaseButton.SignalName.Pressed, Callable.From(OnEditNotePressed));
 		_deleteSaveButton.Connect(BaseButton.SignalName.Pressed, Callable.From(OnDeleteSavePressed));
 		_deleteRunButton.Connect(BaseButton.SignalName.Pressed, Callable.From(OnDeleteRunPressed));
 		_abandonRunButton.Connect(BaseButton.SignalName.Pressed, Callable.From(OnAbandonRunPressed));
@@ -170,15 +176,22 @@ internal sealed partial class SaveBrowserScreen : NSubmenu
 
 		_loadButton = CreateActionButton(SaveUiText.Get(SaveUiText.Keys.SaveBrowser.LoadSnapshot));
 		_backupButton = CreateActionButton(SaveUiText.Get(SaveUiText.Keys.SaveBrowser.Backup));
+		_openFolderButton = CreateActionButton(SaveUiText.Get(SaveUiText.Keys.SaveBrowser.OpenFolder));
+		_editNoteButton = CreateActionButton(SaveUiText.Get(SaveUiText.Keys.SaveBrowser.EditNote));
 		_deleteSaveButton = CreateActionButton(SaveUiText.Get(SaveUiText.Keys.SaveBrowser.DeleteSave));
 		_deleteRunButton = CreateActionButton(SaveUiText.Get(SaveUiText.Keys.SaveBrowser.DeleteRun));
 		_abandonRunButton = CreateActionButton(SaveUiText.GetFromTable(SaveUiText.MainMenuTable, "ABANDON_RUN"));
 
 		actions.AddChild(_loadButton);
 		actions.AddChild(_backupButton);
+		actions.AddChild(_openFolderButton);
+		actions.AddChild(_editNoteButton);
 		actions.AddChild(_deleteSaveButton);
 		actions.AddChild(_deleteRunButton);
 		actions.AddChild(_abandonRunButton);
+
+		_noteDialog = new SaveNoteEditDialog();
+		AddChild(_noteDialog);
 
 		PackedScene backButtonScene = PreloadManager.Cache.GetScene(BackButtonScenePath);
 		NBackButton backButton = backButtonScene.Instantiate<NBackButton>(PackedScene.GenEditState.Disabled);
@@ -195,47 +208,52 @@ internal sealed partial class SaveBrowserScreen : NSubmenu
 		};
 	}
 
-	private void Refresh()
+	private void Refresh(string? preferredKey = null)
 	{
 		_snapshotsByKey.Clear();
-		_runIdsByKey.Clear();
+		_runsByKey.Clear();
+		_runsById.Clear();
 		_title.Text = SaveUiText.Get(_request.IsMultiplayer
 			? SaveUiText.Keys.SaveBrowser.TitleMultiplayer
 			: SaveUiText.Keys.SaveBrowser.TitleSingleplayer);
 		_tree.Clear();
 		TreeItem root = _tree.CreateItem();
 		TreeItem? firstSnapshotItem = null;
+		TreeItem? preferredItem = null;
 		foreach (RunArchiveRecord run in ServiceRegistry.ArchiveService.ListRuns(_request.IsMultiplayer))
 		{
 			string runKey = $"run:{run.RunId}";
-			_runIdsByKey[runKey] = run.RunId;
+			_runsByKey[runKey] = run;
+			_runsById[run.RunId] = run;
 			TreeItem runItem = _tree.CreateItem(root);
 			runItem.SetText(0, BuildRunLabel(run));
 			runItem.SetMetadata(0, runKey);
 			runItem.Collapsed = false;
-
-			AddSaveGroup(runItem, run.RunId, SaveArchiveKind.Auto, SaveUiText.Keys.SaveBrowser.GroupAuto, ref firstSnapshotItem);
-			AddSaveGroup(runItem, run.RunId, SaveArchiveKind.Manual, SaveUiText.Keys.SaveBrowser.GroupManual, ref firstSnapshotItem);
-		}
-
-		if (firstSnapshotItem != null)
-		{
-			firstSnapshotItem.Select(0);
-			_selectedKey = firstSnapshotItem.GetMetadata(0).AsString();
-			if (_selectedKey != null && _snapshotsByKey.TryGetValue(_selectedKey, out SaveArchiveMetadata? selectedSnapshot))
+			if (string.Equals(runKey, preferredKey, StringComparison.Ordinal))
 			{
-				_details.Text = BuildSnapshotDetails(selectedSnapshot);
+				preferredItem = runItem;
 			}
-		}
-		else
-		{
-			_details.Text = SaveUiText.Get(SaveUiText.Keys.SaveBrowser.Empty);
+
+			AddSaveGroup(runItem, run.RunId, SaveArchiveKind.Auto, SaveUiText.Keys.SaveBrowser.GroupAuto, preferredKey, ref firstSnapshotItem, ref preferredItem);
+			AddSaveGroup(runItem, run.RunId, SaveArchiveKind.Manual, SaveUiText.Keys.SaveBrowser.GroupManual, preferredKey, ref firstSnapshotItem, ref preferredItem);
 		}
 
+		TreeItem? itemToSelect = preferredItem ?? firstSnapshotItem;
+		if (itemToSelect == null)
+		{
+			_selectedKey = null;
+			_details.Text = SaveUiText.Get(SaveUiText.Keys.SaveBrowser.Empty);
+			UpdateActionButtons();
+			return;
+		}
+
+		itemToSelect.Select(0);
+		_selectedKey = itemToSelect.GetMetadata(0).AsString();
+		UpdateDetailsForSelection();
 		UpdateActionButtons();
 	}
 
-	private void AddSaveGroup(TreeItem runItem, string runId, SaveArchiveKind kind, string labelKey, ref TreeItem? firstSnapshotItem)
+	private void AddSaveGroup(TreeItem runItem, string runId, SaveArchiveKind kind, string labelKey, string? preferredKey, ref TreeItem? firstSnapshotItem, ref TreeItem? preferredItem)
 	{
 		IReadOnlyList<SaveArchiveMetadata> saves = ServiceRegistry.ArchiveService.ListSnapshots(_request.IsMultiplayer, runId)
 			.Where(save => save.Kind == kind)
@@ -252,6 +270,10 @@ internal sealed partial class SaveBrowserScreen : NSubmenu
 			saveItem.SetText(0, BuildSaveLabel(save));
 			saveItem.SetMetadata(0, key);
 			firstSnapshotItem ??= saveItem;
+			if (string.Equals(key, preferredKey, StringComparison.Ordinal))
+			{
+				preferredItem = saveItem;
+			}
 		}
 	}
 
@@ -259,29 +281,37 @@ internal sealed partial class SaveBrowserScreen : NSubmenu
 	{
 		TreeItem? selected = _tree.GetSelected();
 		_selectedKey = selected?.GetMetadata(0).AsString();
+		UpdateDetailsForSelection();
+		UpdateActionButtons();
+	}
+
+	private void UpdateDetailsForSelection()
+	{
 		if (_selectedKey != null && _snapshotsByKey.TryGetValue(_selectedKey, out SaveArchiveMetadata? save))
 		{
-			_details.Text = BuildSnapshotDetails(save);
-		}
-		else if (_selectedKey != null && _runIdsByKey.TryGetValue(_selectedKey, out string? runId))
-		{
-			_details.Text = BuildRunDetails(runId);
-		}
-		else
-		{
-			_details.Text = SaveUiText.Get(SaveUiText.Keys.SaveBrowser.SelectHint);
+			string? runNote = _runsById.TryGetValue(save.RunId, out RunArchiveRecord? run) ? run.Note : ServiceRegistry.ArchiveService.GetRunNote(_request.IsMultiplayer, save.RunId);
+			_details.Text = BuildSnapshotDetails(save, runNote);
+			return;
 		}
 
-		UpdateActionButtons();
+		if (_selectedKey != null && _runsByKey.TryGetValue(_selectedKey, out RunArchiveRecord? selectedRun))
+		{
+			_details.Text = BuildRunDetails(selectedRun);
+			return;
+		}
+
+		_details.Text = SaveUiText.Get(SaveUiText.Keys.SaveBrowser.SelectHint);
 	}
 
 	private void UpdateActionButtons()
 	{
 		bool hasSnapshot = _selectedKey != null && _snapshotsByKey.ContainsKey(_selectedKey);
-		bool hasRun = _selectedKey != null && (_runIdsByKey.ContainsKey(_selectedKey) || hasSnapshot);
+		bool hasRun = _selectedKey != null && (_runsByKey.ContainsKey(_selectedKey) || hasSnapshot);
 		_loadButton.Disabled = !hasSnapshot;
 		_deleteSaveButton.Disabled = !hasSnapshot;
 		_backupButton.Disabled = !hasRun;
+		_openFolderButton.Disabled = !hasRun;
+		_editNoteButton.Disabled = !hasRun;
 		_deleteRunButton.Disabled = !hasRun;
 		_abandonRunButton.Disabled = !hasRun;
 	}
@@ -313,6 +343,50 @@ internal sealed partial class SaveBrowserScreen : NSubmenu
 			: SaveUiText.Get(SaveUiText.Keys.SaveBrowser.BackupFailed);
 	}
 
+	private void OnOpenFolderPressed()
+	{
+		if (_selectedKey != null && _snapshotsByKey.TryGetValue(_selectedKey, out SaveArchiveMetadata? save))
+		{
+			SaveBrowserCoordinator.OpenFolderForSnapshot(save);
+			return;
+		}
+
+		if (TryGetSelectedRunId(out string? runId) && !string.IsNullOrEmpty(runId))
+		{
+			SaveBrowserCoordinator.OpenFolderForRun(_request.IsMultiplayer, runId);
+		}
+	}
+
+	private async void OnEditNotePressed()
+	{
+		if (_selectedKey != null && _snapshotsByKey.TryGetValue(_selectedKey, out SaveArchiveMetadata? save))
+		{
+			SaveNoteEditDialog.SaveNoteEditResult result = await _noteDialog.ShowAsync(
+				SaveUiText.Get(SaveUiText.Keys.SaveBrowser.NoteDialogTitleSnapshot),
+				SaveUiText.Get(SaveUiText.Keys.SaveBrowser.NoteDialogLabelSnapshot),
+				save.Note);
+			if (result.Confirmed && SaveBrowserCoordinator.UpdateSnapshotNote(save, result.Note))
+			{
+				Refresh(_selectedKey);
+			}
+
+			return;
+		}
+
+		if (TryGetSelectedRunId(out string? runId) && !string.IsNullOrEmpty(runId))
+		{
+			string? currentNote = _selectedKey != null && _runsByKey.TryGetValue(_selectedKey, out RunArchiveRecord? run) ? run.Note : ServiceRegistry.ArchiveService.GetRunNote(_request.IsMultiplayer, runId);
+			SaveNoteEditDialog.SaveNoteEditResult result = await _noteDialog.ShowAsync(
+				SaveUiText.Get(SaveUiText.Keys.SaveBrowser.NoteDialogTitleRun),
+				SaveUiText.Get(SaveUiText.Keys.SaveBrowser.NoteDialogLabelRun),
+				currentNote);
+			if (result.Confirmed && SaveBrowserCoordinator.UpdateRunNote(_request.IsMultiplayer, runId, result.Note))
+			{
+				Refresh(_selectedKey);
+			}
+		}
+	}
+
 	private void OnDeleteSavePressed()
 	{
 		if (_selectedKey == null || !_snapshotsByKey.TryGetValue(_selectedKey, out SaveArchiveMetadata? save))
@@ -320,8 +394,9 @@ internal sealed partial class SaveBrowserScreen : NSubmenu
 			return;
 		}
 
+		string? preferredKey = _selectedKey;
 		SaveBrowserCoordinator.DeleteSnapshot(save);
-		Refresh();
+		Refresh(preferredKey);
 	}
 
 	private void OnDeleteRunPressed()
@@ -331,8 +406,9 @@ internal sealed partial class SaveBrowserScreen : NSubmenu
 			return;
 		}
 
+		string? preferredKey = _selectedKey;
 		SaveBrowserCoordinator.DeleteRun(_request.IsMultiplayer, runId);
-		Refresh();
+		Refresh(preferredKey);
 	}
 
 	private async void OnAbandonRunPressed()
@@ -371,8 +447,9 @@ internal sealed partial class SaveBrowserScreen : NSubmenu
 			return false;
 		}
 
-		if (_runIdsByKey.TryGetValue(_selectedKey, out runId))
+		if (_runsByKey.TryGetValue(_selectedKey, out RunArchiveRecord? run))
 		{
+			runId = run.RunId;
 			return true;
 		}
 
@@ -415,16 +492,22 @@ internal sealed partial class SaveBrowserScreen : NSubmenu
 		return summary;
 	}
 
-	private static string BuildSnapshotDetails(SaveArchiveMetadata save)
+	private static string BuildSnapshotDetails(SaveArchiveMetadata save, string? runNote)
 	{
+		string none = SaveUiText.Get(SaveUiText.Keys.SaveBrowser.NoteValueNone);
 		if (!save.Summary.SummaryAvailable)
 		{
-			return SaveUiText.Format(
+			string details = SaveUiText.Format(
 				SaveUiText.Keys.SaveBrowser.SnapshotDetailsUnavailable,
 				("SaveId", save.SaveId),
 				("Created", save.CreatedUtc.LocalDateTime.ToString("g")),
 				("Unknown", SaveUiText.Get(SaveUiText.Keys.Common.Unknown)),
 				("Error", save.Summary.ErrorMessage ?? SaveUiText.Get(SaveUiText.Keys.Common.Unknown)));
+			return details
+				+ "\n"
+				+ SaveUiText.Format(SaveUiText.Keys.SaveBrowser.SnapshotNoteLine, ("Note", save.Note ?? none))
+				+ "\n"
+				+ SaveUiText.Format(SaveUiText.Keys.SaveBrowser.RunNoteLine, ("Note", runNote ?? none));
 		}
 
 		string hp = save.Summary.CurrentHp.HasValue && save.Summary.MaxHp.HasValue
@@ -433,7 +516,7 @@ internal sealed partial class SaveBrowserScreen : NSubmenu
 		string gold = save.Summary.Gold?.ToString() ?? SaveUiText.Get(SaveUiText.Keys.Common.Unknown);
 		string daily = save.Summary.DailyTime?.LocalDateTime.ToString("g") ?? SaveUiText.Get(SaveUiText.Keys.Common.None);
 		string kind = SaveUiText.Get(save.Kind == SaveArchiveKind.Auto ? SaveUiText.Keys.Common.Auto : SaveUiText.Keys.Common.Manual);
-		return SaveUiText.Format(
+		string baseDetails = SaveUiText.Format(
 			SaveUiText.Keys.SaveBrowser.SnapshotDetails,
 			("SaveId", save.SaveId),
 			("RunId", save.RunId),
@@ -447,19 +530,27 @@ internal sealed partial class SaveBrowserScreen : NSubmenu
 			("Gold", gold),
 			("Daily", daily),
 			("Platform", save.Summary.PlatformType));
+		return baseDetails
+			+ "\n"
+			+ SaveUiText.Format(SaveUiText.Keys.SaveBrowser.SnapshotNoteLine, ("Note", save.Note ?? none))
+			+ "\n"
+			+ SaveUiText.Format(SaveUiText.Keys.SaveBrowser.RunNoteLine, ("Note", runNote ?? none));
 	}
 
-	private string BuildRunDetails(string runId)
+	private string BuildRunDetails(RunArchiveRecord run)
 	{
-		IReadOnlyList<SaveArchiveMetadata> snapshots = ServiceRegistry.ArchiveService.ListSnapshots(_request.IsMultiplayer, runId);
-		SaveArchiveMetadata? latest = snapshots.FirstOrDefault();
-		string current = SaveUiText.CommonYesNo(SaveBrowserCoordinator.IsCurrentRun(_request.IsMultiplayer, runId));
-		string latestSave = latest?.CreatedUtc.LocalDateTime.ToString("g") ?? SaveUiText.Get(SaveUiText.Keys.Common.Unknown);
-		return SaveUiText.Format(
+		string current = SaveUiText.CommonYesNo(SaveBrowserCoordinator.IsCurrentRun(_request.IsMultiplayer, run.RunId));
+		string latestSave = run.LatestSaveUtc?.LocalDateTime.ToString("g") ?? SaveUiText.Get(SaveUiText.Keys.Common.Unknown);
+		string details = SaveUiText.Format(
 			SaveUiText.Keys.SaveBrowser.RunDetails,
-			("RunId", runId),
-			("SnapshotCount", snapshots.Count),
+			("RunId", run.RunId),
+			("SnapshotCount", run.AutoSaveCount + run.ManualSaveCount),
 			("Current", current),
 			("LatestSave", latestSave));
+		return details
+			+ "\n"
+			+ SaveUiText.Format(
+				SaveUiText.Keys.SaveBrowser.RunNoteLine,
+				("Note", run.Note ?? SaveUiText.Get(SaveUiText.Keys.SaveBrowser.NoteValueNone)));
 	}
 }

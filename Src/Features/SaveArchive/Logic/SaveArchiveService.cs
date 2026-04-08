@@ -99,6 +99,7 @@ internal sealed class SaveArchiveService
 		List<RunArchiveRecord> records = new List<RunArchiveRecord>();
 		foreach (string runId in _archiveStore.LoadRunIds(isMultiplayer))
 		{
+			RunArchiveMetadata? runMetadata = _archiveStore.LoadRunMetadata(isMultiplayer, runId);
 			IReadOnlyList<SaveArchiveMetadata> autos = _archiveStore.LoadSnapshotsForRun(isMultiplayer, runId, SaveArchiveKind.Auto);
 			IReadOnlyList<SaveArchiveMetadata> manuals = _archiveStore.LoadSnapshotsForRun(isMultiplayer, runId, SaveArchiveKind.Manual);
 			SaveArchiveMetadata? latest = autos.Concat(manuals)
@@ -112,7 +113,8 @@ internal sealed class SaveArchiveService
 				AutoSaveCount = autos.Count,
 				ManualSaveCount = manuals.Count,
 				LatestSaveUtc = latest?.CreatedUtc,
-				LatestSummary = latest?.Summary
+				LatestSummary = latest?.Summary,
+				Note = NormalizeNote(runMetadata?.Note)
 			});
 		}
 
@@ -135,6 +137,7 @@ internal sealed class SaveArchiveService
 		if (restored)
 		{
 			metadata.LastRestoredUtc = DateTimeOffset.UtcNow;
+			_ = _archiveStore.TryUpdateSnapshotMetadata(metadata);
 			Log.Info($"NyMod.Saves restored snapshot '{metadata.SaveId}' for run '{metadata.RunId}'");
 		}
 
@@ -161,6 +164,52 @@ internal sealed class SaveArchiveService
 		_archiveStore.DeleteRun(isMultiplayer, runId);
 	}
 
+	public bool UpdateSnapshotNote(SaveArchiveMetadata metadata, string? note)
+	{
+		metadata.Note = NormalizeNote(note);
+		return _archiveStore.TryUpdateSnapshotMetadata(metadata);
+	}
+
+	public bool UpdateRunNote(bool isMultiplayer, string runId, string? note)
+	{
+		RunArchiveMetadata metadata = _archiveStore.LoadRunMetadata(isMultiplayer, runId) ?? new RunArchiveMetadata
+		{
+			RunId = runId,
+			IsMultiplayer = isMultiplayer
+		};
+
+		metadata.Note = NormalizeNote(note);
+		return _archiveStore.TryUpdateRunMetadata(metadata);
+	}
+
+	public RunArchiveRecord? GetRun(bool isMultiplayer, string runId)
+	{
+		foreach (RunArchiveRecord run in ListRuns(isMultiplayer))
+		{
+			if (string.Equals(run.RunId, runId, StringComparison.Ordinal) && run.IsMultiplayer == isMultiplayer)
+			{
+				return run;
+			}
+		}
+
+		return null;
+	}
+
+	public string? GetRunNote(bool isMultiplayer, string runId)
+	{
+		return NormalizeNote(_archiveStore.LoadRunMetadata(isMultiplayer, runId)?.Note);
+	}
+
+	public bool TryGetRunDirectory(bool isMultiplayer, string runId, out string? runDirectory)
+	{
+		return _archiveStore.TryGetRunDirectory(isMultiplayer, runId, out runDirectory);
+	}
+
+	public bool TryGetSnapshotDirectory(SaveArchiveMetadata metadata, out string? snapshotDirectory)
+	{
+		return _archiveStore.TryGetSnapshotDirectory(metadata, out snapshotDirectory);
+	}
+
 	private bool TryResolveCurrentRunId(bool isMultiplayer, out string? runId)
 	{
 		runId = null;
@@ -179,4 +228,15 @@ internal sealed class SaveArchiveService
 		string prefix = kind == SaveArchiveKind.Auto ? "auto" : "manual";
 		return $"{prefix}_{createdUtc:yyyyMMdd_HHmmss_fff}";
 	}
+
+	private static string? NormalizeNote(string? note)
+	{
+		if (string.IsNullOrWhiteSpace(note))
+		{
+			return null;
+		}
+
+		return note.Trim();
+	}
+
 }

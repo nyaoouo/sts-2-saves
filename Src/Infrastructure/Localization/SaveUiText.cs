@@ -67,6 +67,8 @@ internal static class SaveUiText
 			public const string TitleMultiplayer = "SAVE_BROWSER.title.multiplayer";
 			public const string LoadSnapshot = "SAVE_BROWSER.action.loadSnapshot";
 			public const string Backup = "SAVE_BROWSER.action.backup";
+			public const string OpenFolder = "SAVE_BROWSER.action.openFolder";
+			public const string EditNote = "SAVE_BROWSER.action.editNote";
 			public const string DeleteSave = "SAVE_BROWSER.action.deleteSave";
 			public const string DeleteRun = "SAVE_BROWSER.action.deleteRun";
 			public const string Empty = "SAVE_BROWSER.empty";
@@ -81,6 +83,13 @@ internal static class SaveUiText
 			public const string SnapshotDetails = "SAVE_BROWSER.snapshotDetails";
 			public const string SnapshotDetailsUnavailable = "SAVE_BROWSER.snapshotDetailsUnavailable";
 			public const string RunDetails = "SAVE_BROWSER.runDetails";
+			public const string SnapshotNoteLine = "SAVE_BROWSER.note.snapshot";
+			public const string RunNoteLine = "SAVE_BROWSER.note.run";
+			public const string NoteValueNone = "SAVE_BROWSER.note.none";
+			public const string NoteDialogTitleSnapshot = "SAVE_BROWSER.noteDialog.title.snapshot";
+			public const string NoteDialogTitleRun = "SAVE_BROWSER.noteDialog.title.run";
+			public const string NoteDialogLabelSnapshot = "SAVE_BROWSER.noteDialog.label.snapshot";
+			public const string NoteDialogLabelRun = "SAVE_BROWSER.noteDialog.label.run";
 		}
 
 		internal static class Popup
@@ -90,6 +99,8 @@ internal static class SaveUiText
 			public const string SingleplayerUnreadableBody = "POPUP.loadFailed.singleplayerUnreadable.body";
 			public const string MultiplayerUnreadableBody = "POPUP.loadFailed.multiplayerUnreadable.body";
 			public const string MultiplayerMainMenuMissingBody = "POPUP.loadFailed.multiplayerMainMenuMissing.body";
+			public const string OpenFolderFailedTitle = "POPUP.openFolderFailed.title";
+			public const string OpenFolderFailedBody = "POPUP.openFolderFailed.body";
 		}
 	}
 }
