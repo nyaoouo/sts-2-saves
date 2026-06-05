@@ -11,12 +11,15 @@ namespace NyMod.Saves.Infrastructure.Compat;
 /// </summary>
 internal static class RunManagerCompat
 {
-    // RunManager.SetUpSavedSinglePlayer changed return type:
-    //   v0.103.2: void
-    //   v0.104.0: async Task
+    // RunManager.SetUpSavedSinglePlayer changed across versions:
+    //   v0.103.2: void SetUpSavedSinglePlayer(...)
+    //   v0.104.0: async Task SetUpSavedSinglePlayer(...)
+    //   v0.107.0: renamed to SetUpSavedSingleplayer (lowercase 'p'), async Task
     public static async Task SetUpSavedSinglePlayer(RunManager instance, RunState state, SerializableRun save)
     {
-#if STS2_V_GE_010400
+#if STS2_V_GE_010700
+        await instance.SetUpSavedSingleplayer(state, save).ConfigureAwait(true);
+#elif STS2_V_GE_010400
         await instance.SetUpSavedSinglePlayer(state, save).ConfigureAwait(true);
 #else
         instance.SetUpSavedSinglePlayer(state, save);
